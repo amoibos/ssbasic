@@ -17,9 +17,11 @@ import java.util.Stack;
 
 //TODO:		file handling: OPEN, INPUT#, PRINT# , CLOSE
 //TODO:		terminal
-//TODO:	 	more built-ins commands
+//TODO:	 	more builtins commands: DIM, DEF, RESTORE
 //TODO:		optimization
-//TODO:		DIM feature
+//TODO:		robustness for basic dialects
+//TODO:		DIM and array support
+//FIXME:	repair "grammar style" and add more semantic checks
 
 public class BasicInterpreter {
 	// current token index
@@ -39,10 +41,10 @@ public class BasicInterpreter {
 	//pointer within memory
 	int memptr = 0;
 	static final String COMMANDSEPERATOR = Tokenizer.COMMANDSEPERATOR;
-	Scanner prompt = new Scanner(System.in);
+	static Scanner prompt = new Scanner(System.in);
 	Console console = System.console();
 	
-	public enum Errors{Syntax, Expected, Unimplemented, Unknown, Handle, Jump, Mismatch, Quantity, Parameter};
+	public enum Errors{Syntax, Unknown, Unimplemented, Comparison, Handle, Jump, Mismatch, Quantity, Parameter};
 	
 	BasicInterpreter(String fileName) {
 		lines = new HashMap<String, Integer>();
@@ -152,6 +154,7 @@ public class BasicInterpreter {
 	}
 	
 	 void lang_LET(String token) {
+		 if(token.equals(COMMANDSEPERATOR)) {return;}
 		 //for explicit LET usage
 		 if(tokens[index - 1].equals("LET")) {token = tokens[index++];}
 		 if(at("=")) {
@@ -169,7 +172,7 @@ public class BasicInterpreter {
             }
             expect(COMMANDSEPERATOR);
 		 } else {
-			 error(Errors.Expected, token);
+			 error(Errors.Unknown, token);
 		 }
 	 }
 	
@@ -182,7 +185,7 @@ public class BasicInterpreter {
 				str = errorLine + ": Expected \'" +
 					token + "\' founded \'" + tokens[index - 1] + "\' in ";
 				break;
-			case Expected: 
+			case Unknown: 
 				str = errorLine + ": Unknown command \'" +
 					token + "\' in ";
 				break;
@@ -190,7 +193,7 @@ public class BasicInterpreter {
 				str = errorLine + ": Unimplemented keyword/function \'" +
 					token + "\' in ";	
 				break;
-			case Unknown:
+			case Comparison:
 				str = errorLine + ": Unknown comparision operator \'" + 
 					token + "\' in ";
 				break;
@@ -215,10 +218,9 @@ public class BasicInterpreter {
 			default:
 				str = "ups";		
 			}
-			//console.printf(str);
-			System.err.print(str);
+			output(str);
 	     	for(int i = start; i <= index; ++i) {
-	     		System.err.print(tokens[i] + " ");
+	     		output(tokens[i] + " ");
 	     	}
 			System.exit(-err.ordinal());
 	} 
@@ -240,20 +242,20 @@ public class BasicInterpreter {
 	String shortener(BasicType var) {
 		double value;
 		if(var instanceof BasicDouble) {
-			value = var.value;
+			value = ((BasicDouble)var).value;
 			if(Math.abs(value - (int)value) < 1e-9) {
 				return new String("" + (int) value);
 			}
 			return "" + value;
 		} else if(var instanceof BasicInt) {
-			return "" + (int)var.value;
+			return "" + ((BasicInt)var).value;
 		} else {
 			return ((BasicString)var).value;
 		}
 	}
 	
-	void output(String str) {
-		//console.printf(shortener(expression()) + " ");
+	static void output(String str) {
+		//console.printf(str);
 		System.out.print(str);
 	}
 	
@@ -336,27 +338,27 @@ public class BasicInterpreter {
         }
         if(op.equals("=")) {
             if(left instanceof BasicString) {return compare == 0;}
-        	return (left).value == (right).value;
+        	return left.value == right.value;
         }
         if(op.equals("<")) {
         	if(left instanceof BasicString) {return compare < 0;}
-        	return (left).value < (right).value;
+        	return left.value < right.value;
         }
         if(op.equals("<=")) {
         	if(left instanceof BasicString) {return compare <= 0;}
-        	return (left).value <= (right).value;
+        	return left.value <= right.value;
         }
         if(op.equals(">")) {
         	if(left instanceof BasicString) {return compare > 0;}
-        	return (left).value > (right).value;
+        	return left.value > right.value;
         }
         if(op.equals(">=")) {
         	if(left instanceof BasicString) {return compare >= 0;}
-        	return (left).value >= (right).value;
+        	return left.value >= right.value;
         }
         if(op.equals("<>")) {
         	if(left instanceof BasicString) {return compare != 0;}
-        	return (left).value != (right).value;
+        	return left.value != right.value;
         }
         error(Errors.Unknown, op);
         //never reached
@@ -421,7 +423,7 @@ public class BasicInterpreter {
             	if(right instanceof BasicDouble) {
             		left = new BasicDouble(left.value / right.value);
             	} else if(right instanceof BasicInt) {
-            		left = new BasicInt(left.value / right.value);
+            		left = new BasicInt(((BasicInt)left).value / ((BasicInt)right).value);
             	}
             } else {
                 break;
@@ -478,10 +480,15 @@ public class BasicInterpreter {
         //number sign
         if (token.charAt(0) == '-') {
             BasicType val = expression();
-            if(val instanceof BasicDouble || val instanceof BasicInt) {
-            	val.value *= -1;
-            	return val;
-            }
+            if(val instanceof BasicDouble) { 
+            	((BasicDouble)val).value *= -1; 
+            	val.value *= -1; //unnecessary stuff
+            } else if(val instanceof BasicInt) {
+            	((BasicInt)val).value *= -1; 
+            	val.value *= -1; //unnecessary stuff
+            } else {return null;}
+            
+            return val; 
         }
         return null;
         
@@ -524,23 +531,26 @@ public class BasicInterpreter {
 		
 		if(at("GOSUB")) {
        		wasGosub = true;
-       	} else if(!at("GOTO")) {error(Errors.Expected, "GOSUB or GOTO");}
+       	} else if(!at("GOTO")) {error(Errors.Syntax, "GOSUB or GOTO");}
 		for(i = 0; i < position; ++i){
-   			lineNumber = ""+(int)(expression()).value;
-   			if(!(at(",") || at(COMMANDSEPERATOR))) {error(Errors.Syntax, tokens[index]);}
+   			if(at(COMMANDSEPERATOR)) {error(Errors.Jump, "" + position);}
+			lineNumber = ""+(int)(expression()).value;
+   			if(!at(",")) {error(Errors.Syntax, tokens[index]);}
    		}
 		//get end of statement
 		while(!at(COMMANDSEPERATOR)) {
 			expression();
-			if(!(at(",") || at(COMMANDSEPERATOR))) {error(Errors.Syntax, tokens[index]);}
+			if(at(",")) { continue;}
 		}
-		if((i + 1) == position) {
-			if(wasGosub) {stack.push(new BasicInt(index));}
-		} else {error(Errors.Expected, ",");}
+		if(i == position) {
+			if(wasGosub) {
+				stack.push(new BasicInt(index));
+			}
+		} else {error(Errors.Syntax, ",");}
 		index = jumpTarget(lineNumber);
 	}
 	
-	String input() {
+	static String input() {
 		/*console.readLine()*/
 		return prompt.nextLine();
 	}
@@ -548,7 +558,7 @@ public class BasicInterpreter {
 	void lang_INPUT() {
 		String name = tokens[index++];
 		if(!name.startsWith("\"")) {
-	    	System.out.print("? ");
+	    	output("? ");
 	    	if(name.endsWith("$")) {
 	    		variables.put(name, (new BasicString(input())));
 	    	} else if(name.endsWith("%")) {
@@ -557,7 +567,7 @@ public class BasicInterpreter {
 	    		variables.put(name, (new BasicDouble(Double.parseDouble(input()))));
 	    	}
 	    } else {
-	    	System.out.print(name);
+	    	output(name);
 	    }
 	    
 	    while(!at(COMMANDSEPERATOR)) {
@@ -630,13 +640,13 @@ public class BasicInterpreter {
 	}
 	
 	static void usage() {
-		System.err.println("usage: java BasicInterpreter <FILE>");
+		output("usage: java BasicInterpreter <FILE>");
 	}
 	
 	public static void main(String[] args) {
 		if(args.length > 0) {
 			new BasicInterpreter(args[0]).run();
-		} else {usage();}
+		} else {BasicInterpreter.usage();}
 
 	}
 }

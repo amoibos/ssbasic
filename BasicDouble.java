@@ -10,6 +10,11 @@ public class BasicDouble extends BasicType {
 	public double value;
 	public boolean explicit = false;
 	
+	/*
+	 * caveat also for BasicInt
+	 * built-ins uses BasicType.value instead of the specific Basic[String|Double].value
+	 * there are always two value members
+	 * */
 	public BasicDouble(double value) {
 		super.value = this.value = value;
 	}
