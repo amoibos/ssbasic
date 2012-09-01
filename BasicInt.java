@@ -12,7 +12,13 @@ public class BasicInt extends BasicType {
 	public BasicInt(int value) {
 		super.value = this.value = value;
 	}
+	
 	public BasicInt(double value) {
 		super.value = this.value = (int)value;
 	}
+	
+	public BasicInt() {
+		super.value = this.value = 0;
+	}
+	
 }

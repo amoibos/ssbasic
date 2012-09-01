@@ -17,10 +17,8 @@ import java.util.Stack;
 
 //TODO:		file handling: OPEN, INPUT#, PRINT# , CLOSE
 //TODO:		terminal
-//TODO:	 	more builtins commands: DIM, DEF, RESTORE
 //TODO:		optimization
 //TODO:		robustness for basic dialects
-//TODO:		DIM and array support
 //FIXME:	repair "grammar style" and add more semantic checks
 
 public class BasicInterpreter {
@@ -38,11 +36,15 @@ public class BasicInterpreter {
 	Stack<BasicType> stack;
 	//for DATA and READ
 	ArrayList<BasicType> memory;
-	//pointer within memory
+	//pointer within memory structure
 	int memptr = 0;
+	//for dim
+	HashMap<String, BasicType> arrays;
+	HashMap<String, Boolean> arrayNames;
+	
 	static final String COMMANDSEPERATOR = Tokenizer.COMMANDSEPERATOR;
 	static Scanner prompt = new Scanner(System.in);
-	Console console = System.console();
+	//Console console = System.console();
 	
 	public enum Errors{Syntax, Unknown, Unimplemented, Comparison, Handle, Jump, Mismatch, Quantity, Parameter};
 	
@@ -59,10 +61,148 @@ public class BasicInterpreter {
 		functions = new HashMap<String, Integer>();
 		stack = new Stack<BasicType>();
 		memory = new ArrayList<BasicType>();
-	}	
+		arrays = new HashMap<String, BasicType>();
+		arrayNames = new HashMap<String, Boolean>();
+	}
+	
+	static String input() {
+		/*console.readLine()*/
+		return prompt.nextLine();
+	}
+	
+	String parameterList() {
+		if(!at("(") && !at("[")) {error(Errors.Syntax, tokens[index]);}
+		 StringBuilder dim = new StringBuilder();
+		 do {
+			BasicType dimSize = expression();
+			dim.append("" + (int)dimSize.value);
+			if(at(",")) {
+				dim.append(",");
+				continue;
+			}
+		} while(!at(")") && !at("]"));
+		return dim.toString();
+	}
+	
+	void input_helper(String name) {
+		if(!name.startsWith("\"")) {output("? ");};
+    	if(name.endsWith("$")) {
+    		if(arrayNames.containsKey(name) && (at("(") || at("["))) {
+    			--index;
+    			arrays.put(name + "_" + parameterList(), (new BasicString(input())));
+    		} else {
+    			variables.put(name, (new BasicString(input())));
+    		} 
+    	} else if(name.endsWith("%")) {
+    		if(arrayNames.containsKey(name) && (at("(") || at("["))) {
+    			--index;
+    			arrays.put(name + "_" + parameterList(), (new BasicInt(Integer.parseInt(input()))));
+    		} else {
+    			variables.put(name, (new BasicInt(Integer.parseInt(input()))));
+    		}
+    	} else {
+    		if(arrayNames.containsKey(name) && (at("(") || at("["))) {
+    			--index;
+    			arrays.put(name + "_" + parameterList(), (new BasicDouble(Double.parseDouble(input()))));
+    		} else {
+    			variables.put(name, (new BasicDouble(Double.parseDouble(input()))));
+    		} 
+    	}
+	}
+	
+	void lang_INPUT() {
+		String name = tokens[index++];
+		if(name.startsWith("\"")) {output(name);}
+		input_helper(name);
+	    
+	    while(!at(COMMANDSEPERATOR)) {
+	    	name = tokens[index++];
+	    	input_helper(name);
+	    	at(",");
+	    } 
+	}
+	
+	int jumpTarget(String lineNumber) {
+		Integer jumpTarget = lines.get(lineNumber);
+   		if(jumpTarget == null) {
+   			error(Errors.Jump, lineNumber);
+   		}
+   		return jumpTarget;
+	}
+	
+	void allocator(String varName, Integer size[], BasicType basis) {
+		//TODO: check if element start by 0 or 1
+		int value[] = new int[size.length];
+		int position = size.length - 1;
+		while(true) {
+			StringBuilder sB = new StringBuilder();
+			int i;
+			for(i = 0; i < size.length - 1; ++i) {
+				sB.append((value[i] + 1) + ",");	
+			}
+			sB.append((value[i] + 1) + "");
+			try {
+				arrays.put(varName + "_" + sB.toString(), basis.getClass().newInstance());
+			} catch (InstantiationException e) {
+				e.printStackTrace();
+			} catch (IllegalAccessException e) {
+				e.printStackTrace();
+			}
+		
+			if(++value[position] == size[position]) {
+				boolean changed = false;
+				for(int k = position; k < size.length; ++k) {value[k] = 0;}
+				for(int k = position - 1; k >= 0; --k) {
+					if(value[k] < size[k]) {
+						++value[k]; 
+						changed = true; 
+						break;
+					}
+				}
+				if(!changed) {return;}
+				position = size.length - 1;
+			} 
+		}
+	}
+	
+	String currentLine(int index) {
+		int lastLine;
+		//find position for first token in the current line and retrieve key from value 
+		for(lastLine=index; !lines.containsValue(lastLine) && lastLine>0; --lastLine);
+		for(Entry<String, Integer> i : lines.entrySet()) {
+			if(i.getValue() == lastLine) {
+				return i.getKey();
+			}
+		}	
+		return "0";
+	}
+//*****************************************************************************************	
 	
 	void lang_DIM() {
-		error(Errors.Unimplemented, tokens[index-1]);
+		do {
+			String varName = tokens[index++];
+			if(!at("(") && !at("[")) {error(Errors.Syntax, tokens[index]);}
+			ArrayList<Integer> dims = new ArrayList<Integer>();
+			do {
+				BasicType dimSize = expression();
+				dims.add((int)dimSize.value);
+				if(at(",")) {
+					continue;
+				}
+			} while(!at(")") && !at("]"));
+			Integer[] param = (Integer[]) dims.toArray(new Integer[dims.size()]);
+			if(varName.endsWith("%")) {
+				allocator(varName, param, new BasicInt(0));
+			} else if(varName.endsWith("$")) {
+				allocator(varName, param, new BasicString(""));
+			} else {allocator(varName, param, new BasicDouble(0.0));}
+			arrayNames.put(varName, true);
+			if(!at(",")) {
+				if(!at(COMMANDSEPERATOR)) {
+					error(Errors.Syntax, tokens[index]);
+				} else {break;}
+			} 
+		} while(true);
 	}
 	
 	void lang_DEF() {
@@ -107,7 +247,6 @@ public class BasicInterpreter {
 	}
 	
 	void lang_DATA() {
-		memory.removeAll(memory);
 		while(!at(COMMANDSEPERATOR)) {
             memory.add(factor());
             //skip parameter delimiter token
@@ -122,6 +261,10 @@ public class BasicInterpreter {
 	void lang_READ() {
 		if(memptr >= memory.size()) {return;}
 		while(!at(COMMANDSEPERATOR)) {
+			if((tokens[index].endsWith("$") && !(memory.get(memptr) instanceof BasicString)
+					|| (tokens[index].endsWith("%") && !(memory.get(memptr) instanceof BasicInt)))) {
+				error(Errors.Syntax, tokens[index]);
+			}
 			variables.put(tokens[index++], memory.get(memptr++));
             //skip parameter delimiter token
             at(",");
@@ -141,22 +284,12 @@ public class BasicInterpreter {
    		index = jumpTarget(lineNumber);
 	}
 	
-	String currentLine(int index) {
-		int lastLine;
-		//find position for first token in the current line and retrieve key from value 
-		for(lastLine=index; !lines.containsValue(lastLine) && lastLine>0; --lastLine);
-		for(Entry<String, Integer> i : lines.entrySet()) {
-			if(i.getValue() == lastLine) {
-				return i.getKey();
-			}
-		}	
-		return "0";
-	}
-	
-	 void lang_LET(String token) {
+	 void lang_LET(String token) {				 
 		 if(token.equals(COMMANDSEPERATOR)) {return;}
 		 //for explicit LET usage
 		 if(tokens[index - 1].equals("LET")) {token = tokens[index++];}
+		 if(token.equals("D"))
+			 System.out.println("");
 		 if(at("=")) {
 			 BasicType exp = expression();
 			 //force float type because of name suffix
@@ -171,9 +304,15 @@ public class BasicInterpreter {
             	variables.put(token, exp);
             }
             expect(COMMANDSEPERATOR);
-		 } else {
-			 error(Errors.Unknown, token);
-		 }
+		 } else if(arrayNames.containsKey(token)) {
+			 String varName = token;
+			 String dim = parameterList();
+			 expect("=");
+			 arrays.put(varName + "_" + dim, expression());
+			 expect(COMMANDSEPERATOR);
+		 	} else {
+		 		error(Errors.Unknown, token);
+		 	}
 	 }
 	
 	void error(Errors err, String token) {
@@ -434,7 +573,6 @@ public class BasicInterpreter {
 
     BasicType factor() {
         String token = tokens[index++];
-        
         Builtins builtins = new Builtins(this);
         BasicType ret = builtins.builtins(token);
         if(ret != null) {
@@ -472,7 +610,15 @@ public class BasicInterpreter {
         	return new BasicDouble(Double.parseDouble(token));
         }
         if(Character.isAlphabetic(token.charAt(0))) {
-            return variables.get(token);
+        	//array
+            if(arrayNames.containsKey(token) && (at("[") || at("("))) {        	
+	   			 	--index;
+            		String dim = parameterList();
+	   			    return arrays.get(token + "_" + dim.toString());	
+            	} else {
+            		if(!variables.containsKey(token)) {error(Errors.Unknown, token);}
+            		return variables.get(token);
+            	}
         }
         if (token.charAt(0) == '\"') {
             return new BasicString(token.substring(1, token.length() - 1));
@@ -535,7 +681,7 @@ public class BasicInterpreter {
 		for(i = 0; i < position; ++i){
    			if(at(COMMANDSEPERATOR)) {error(Errors.Jump, "" + position);}
 			lineNumber = ""+(int)(expression()).value;
-   			if(!at(",")) {error(Errors.Syntax, tokens[index]);}
+   			if(!at(",") && !at(COMMANDSEPERATOR)) {error(Errors.Syntax, tokens[index]);}
    		}
 		//get end of statement
 		while(!at(COMMANDSEPERATOR)) {
@@ -550,47 +696,7 @@ public class BasicInterpreter {
 		index = jumpTarget(lineNumber);
 	}
 	
-	static String input() {
-		/*console.readLine()*/
-		return prompt.nextLine();
-	}
 	
-	void lang_INPUT() {
-		String name = tokens[index++];
-		if(!name.startsWith("\"")) {
-	    	output("? ");
-	    	if(name.endsWith("$")) {
-	    		variables.put(name, (new BasicString(input())));
-	    	} else if(name.endsWith("%")) {
-	    		variables.put(name, (new BasicInt(Integer.parseInt(input()))));
-	    	} else {
-	    		variables.put(name, (new BasicDouble(Double.parseDouble(input()))));
-	    	}
-	    } else {
-	    	output(name);
-	    }
-	    
-	    while(!at(COMMANDSEPERATOR)) {
-	    	name = tokens[index++];
-	    	if(name.endsWith("$")) {
-	    		variables.put(name, (new BasicString(prompt.nextLine())));
-	    	} else if(name.endsWith("%")) {
-	    		variables.put(name, (new BasicInt(Integer.parseInt(prompt.nextLine()))));
-	    	} else {
-	    		variables.put(name, (new BasicDouble(Double.parseDouble(prompt.nextLine()))));
-	    	}
-	    	at(",");
-	    } 
-	    //prompt.close();
-	}
-	
-	int jumpTarget(String lineNumber) {
-		Integer jumpTarget = lines.get(lineNumber);
-   		if(jumpTarget == null) {
-   			error(Errors.Jump, lineNumber);
-   		}
-   		return jumpTarget;
-	}
    
 	void lang_GOSUB() {
 	    String lineNumber = tokens[index++];
@@ -608,7 +714,7 @@ public class BasicInterpreter {
 		while(!tokens[index].equals("END")) {
 			Method method = null;
 			try {
-			  method = getClass().getDeclaredMethod("lang_"+tokens[index++]);
+			  method = getClass().getDeclaredMethod("lang_" + tokens[index++]);
 			} catch (SecurityException e) {
 			  e.printStackTrace();
 			  System.exit(3);

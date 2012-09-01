@@ -23,7 +23,7 @@ public class Builtins {
 	    	
 		}
 		if(token.equals("INT")) {
-	        return new BasicInt((int)Math.ceil((basic.expression()).value));
+	        return new BasicInt(Math.ceil((basic.expression()).value));
 	    }
 		if(token.equals("SGN")) {
 	        return new BasicInt(Math.signum((basic.expression()).value)); 

@@ -24,5 +24,8 @@ public class BasicDouble extends BasicType {
 		this.explicit = explicit;
 	}
 	
-	
+	public BasicDouble() {
+		super.value = this.value = 0;
+		this.explicit = true;
+	}
 }

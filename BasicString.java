@@ -17,4 +17,9 @@ public class BasicString extends BasicType {
 	public BasicString(int value) {		
 		this.value = String.format("%" + value + "s", "");
 	}
+	
+	public BasicString() {
+		this.value = "";
+	}
+	
 }

@@ -23,7 +23,7 @@ public class Tokenizer {
 	String fileName;
 	Console console = System.console();
 	// Is AND,OR, XOR operator definition really necessary?
-	static final Pattern TOKENS = Pattern.compile("(?<=REM).*|\\.?\\d+|\\w+[\\$|%]?|[():,;=+\\-*/]|<[=>]?|>=?|\"[^\"]*\"");
+	static final Pattern TOKENS = Pattern.compile("(?<=REM).*|\\d*\\.?\\d+|\\w+[\\$|%]?|[\\[\\]():,;=+\\-*/]|<[=>]?|>=?|\"[^\"]*\"");
 	
 	public static final String COMMANDSEPERATOR = ":";
 		
@@ -55,6 +55,8 @@ public class Tokenizer {
 					output(cnt + ": Duplicated linenumber " + token);
 					System.exit(-2);
 				}
+				if(token.equals("266")) 
+					System.out.println("");
 				lineNumbers.put(token, tokenList.size() - 1);
 			} catch(NumberFormatException e) {
 				//no line number detected
