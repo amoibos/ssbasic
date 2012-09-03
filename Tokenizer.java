@@ -22,8 +22,7 @@ import java.util.regex.Pattern;
 public class Tokenizer {
 	String fileName;
 	Console console = System.console();
-	// Is AND,OR, XOR operator definition really necessary?
-	static final Pattern TOKENS = Pattern.compile("(?<=REM).*|\\d*\\.?\\d+|\\w+[\\$|%]?|[\\[\\]():,;=+\\-*/]|<[=>]?|>=?|\"[^\"]*\"");
+	static final Pattern TOKENS = Pattern.compile("(?<=REM).*|\\d*\\.?\\d+|\\w+[\\$|%]?|[\\[\\]()\\^:,;=+\\-*/]|<[=>]?|>=?|\"[^\"]*\"");
 	
 	public static final String COMMANDSEPERATOR = ":";
 		
@@ -36,7 +35,7 @@ public class Tokenizer {
 		System.err.print(str);
 	}
 	
-	public String[] splitIntoToken(String[] lines, HashMap<String, Integer> lineNumbers) {
+	public String[] splitIntoToken(String[] lines, HashMap<String, Integer> lineNumbers, HashMap<Integer, Integer> tokenIndex) {
 		Stack<String> tokenList = new Stack<String>();
 		String token = null;
 		int cnt = 0;
@@ -55,12 +54,11 @@ public class Tokenizer {
 					output(cnt + ": Duplicated linenumber " + token);
 					System.exit(-2);
 				}
-				if(token.equals("266")) 
-					System.out.println("");
 				lineNumbers.put(token, tokenList.size() - 1);
 			} catch(NumberFormatException e) {
 				//no line number detected
 				tokenList.push(token.toUpperCase());
+				tokenIndex.put(tokenList.size() - 2, cnt);
 			}
 			
 			//for case insensitity
@@ -76,10 +74,12 @@ public class Tokenizer {
 					token = token.toUpperCase();
 				}
 				tokenList.push(token);
+				tokenIndex.put(tokenList.size() - 2, cnt);
 	        }
 			//every command is separated by delimiter
 			if(!tokenList.lastElement().endsWith(COMMANDSEPERATOR)) {
 				tokenList.push(COMMANDSEPERATOR);
+				tokenIndex.put(tokenList.size() - 2, cnt);
 			}
 				
 		}
@@ -104,11 +104,11 @@ public class Tokenizer {
 		return (String[]) content.toArray(new String[content.size()]);
 	}
 	
-	String[] run(HashMap<String, Integer> lineNumber) throws IOException {	
+	String[] run(HashMap<String, Integer> lineNumber, HashMap<Integer, Integer> tokenIndex) throws IOException {	
 		String[] lines = null;
 		
 		lines = readFromFile(fileName);
-		return splitIntoToken(lines, lineNumber);
+		return splitIntoToken(lines, lineNumber, tokenIndex);
 	}
 	
 }
