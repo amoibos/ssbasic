@@ -428,7 +428,7 @@ public class BasicInterpreter {
 		expect(COMMANDSEPERATOR);
 	}
 	
-	void lang_FOR() {
+	void lang_FOR() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         String cntVar = tokens[index++];
         expect("=");
         variables.put(cntVar, expression());
@@ -510,11 +510,7 @@ public class BasicInterpreter {
             } else if(at("-")) {
             	BasicType right = term();
             	if(right instanceof BasicDouble || left instanceof BasicDouble) {
-            		if(left instanceof BasicString) {
-            			left = new BasicString(((BasicString)left).value + "-" + right.value);
-            		} else {
-            				left = new BasicDouble(left.value - right.value);
-            			}
+            		left = new BasicDouble(left.value - right.value);
             	} else {
             		left = new BasicInt(left.value - right.value);
             	}
@@ -600,7 +596,7 @@ public class BasicInterpreter {
         if(functions.containsKey(token)) {
         	int cnt = 0;
         	expect("(");
-        	//send parameter to stack (1)
+        	//send parameter to stack
         	while(true) {
         		stack.push(expression());
         		++cnt;
@@ -656,8 +652,8 @@ public class BasicInterpreter {
             return new BasicString(token.substring(1, token.length() - 1));
         }
         //number sign
-        if(token.charAt(0) == '-') {
-            BasicType val = expression();
+        if(token.equals("-")) {
+            BasicType val = factor();
             if(val instanceof BasicDouble) { 
             	((BasicDouble)val).value *= -1; 
             	val.value *= -1; //unnecessary stuff
@@ -746,7 +742,7 @@ public class BasicInterpreter {
     	index = ((BasicInt)stack.pop()).value;
     }
     
-    void run() {
+    void run() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
     	Method method = null;
 		try {
 		  method = getClass().getDeclaredMethod("lang_" + tokens[index++]);
@@ -754,32 +750,18 @@ public class BasicInterpreter {
 		  e.printStackTrace();
 		  System.exit(3);
 		} catch(NoSuchMethodException e) {
-			try {
-				Class<?>[] arg = new Class[]{String.class};
-				method = getClass().getDeclaredMethod("lang_LET", arg);
-			} catch(NoSuchMethodException e1) {
-				e1.printStackTrace();
-			} catch(SecurityException e1) {
-				e1.printStackTrace();
-			}
+			Class<?>[] arg = new Class[]{String.class};
+			method = getClass().getDeclaredMethod("lang_LET", arg);
 		}
-		try {
-			if(method.getName().equals("lang_LET")) {
+		
+		if(method.getName().equals("lang_LET")) {
 				method.invoke(this, tokens[index - 1]);
-			}
-			else {
+		} else {
 				method.invoke(this);
-			}
-		} catch (IllegalArgumentException e) {
-			e.printStackTrace();
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-		} catch (InvocationTargetException e) {
-			e.printStackTrace();
 		}
     }
     
-	void start() {
+	void start() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 		while(!tokens[index].equals("END")) {
 			run();
 		}
@@ -789,7 +771,7 @@ public class BasicInterpreter {
 		output("usage: java BasicInterpreter <FILE>");
 	}
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 		if(args.length > 0) {
 			new BasicInterpreter(args[0]).start();
 		} else {BasicInterpreter.usage();}
