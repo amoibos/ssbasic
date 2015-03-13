@@ -1,0 +1,1 @@
+Simple Stupid Basic interpreter based earlier projects should support common basic syntax. You can use arrays, floats, ints and strings and defining some functions and other stuff. The code is really simple and robust uses some Java 5 features.
